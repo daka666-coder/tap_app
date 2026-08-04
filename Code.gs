@@ -34,6 +34,16 @@ const SHEET_WORKHOUR = 'WorkHour_Check';
 const PROP_SECRET_KEY = 'TAPAPP_SECRET';
 const TZ = 'Asia/Taipei';
 
+// ✅ 每次修改 Code.gs 並部署新版本時同步更新，方便用 GET /exec 直接確認雲端是否已套用最新程式碼
+const SCRIPT_VERSION = 'v2026.08.04+cloudflareReviewProxy';
+
+// ✅ 核准/駁回信件連結改走 Cloudflare（非 google.com 網域）。
+// 原因：手機多帳號時，Gmail App 點連結會自動幫 script.google.com 網址加上 /u/{n}/，
+// 但 Apps Script 的 /exec 網址不支援這種路徑格式，一律回應「找不到網頁」。
+// Cloudflare Pages Function（tap_app/functions/review.js）收到請求後在伺服器端轉發給這支 /exec，
+// 瀏覽器網址列全程停留在 daka-2cm.pages.dev，不會被 Gmail 改寫。
+const REVIEW_PROXY_URL = 'https://daka-2cm.pages.dev/review';
+
 /* ===================== Entry ===================== */
 
 function doGet(e) {
@@ -41,7 +51,7 @@ function doGet(e) {
     const action = (e && e.parameter && e.parameter.action) ? String(e.parameter.action).trim() : '';
 
     if (!action) {
-      return jsonOut({ ok: true, msg: 'Tap App API - GET OK', timestamp: new Date().toISOString() });
+      return jsonOut({ ok: true, msg: 'Tap App API - GET OK', version: SCRIPT_VERSION, timestamp: new Date().toISOString() });
     }
 
     if (action === 'data') {
@@ -607,18 +617,16 @@ function makeToken_(reqId) {
 }
 
 function buildApproveUrl_(reqId, token, action) {
-  const base = ScriptApp.getService().getUrl();
-  return `${base}?action=${action}&reqId=${encodeURIComponent(reqId)}&token=${encodeURIComponent(token)}`;
+  return `${REVIEW_PROXY_URL}?action=${action}&reqId=${encodeURIComponent(reqId)}&token=${encodeURIComponent(token)}`;
 }
 
 // ✅ 駁回原因小表單（GET 表單送回本身，導向 action=rejectSubmit）
 function rejectFormOut_(reqId, token) {
-  const base = ScriptApp.getService().getUrl();
   const html = `
     <div style="font-family:system-ui; padding:24px; max-width:480px; margin:0 auto;">
       <h3>駁回補打卡申請</h3>
       <p>單號：${escapeHtml_(reqId)}</p>
-      <form method="GET" action="${escapeHtml_(base)}">
+      <form method="GET" action="${escapeHtml_(REVIEW_PROXY_URL)}">
         <input type="hidden" name="action" value="rejectSubmit">
         <input type="hidden" name="reqId" value="${escapeHtml_(reqId)}">
         <input type="hidden" name="token" value="${escapeHtml_(token)}">
