@@ -22,7 +22,8 @@ const String kApiUrl =
 /// 5) 核准/駁回信件連結改走 Cloudflare 代理（daka-2cm.pages.dev/review），修正手機多帳號
 ///    時 Gmail 改寫 script.google.com 連結導致「找不到網頁」的問題；結果頁改自己畫，
 ///    駁回表單送出後按鈕會反灰防止重複點擊
-const String kAppVersion = 'v2026.08.04+cloudflareReviewProxy';
+/// 6) 打卡/例外申請「送出」鍵送出中會反灰並顯示「送出中…」，避免手滑連點造成重複送出
+const String kAppVersion = 'v2026.08.04+submitDoubleTapGuard';
 
 /// ✅ 取得定位逾時秒數
 const int kGpsTimeoutSec = 15;
@@ -258,6 +259,7 @@ class _ClockPageState extends State<ClockPage> {
 
   String? _error;
   bool _loading = true;
+  bool _isSubmittingPunch = false;
 
   // ✅ 登入記錄（本機）
   static const String _kLoginEmpIdKey = 'login:empId';
@@ -940,6 +942,8 @@ class _ClockPageState extends State<ClockPage> {
   /* ----------------------------- Punch Flow ----------------------------- */
 
   Future<void> _doPunch() async {
+    if (_isSubmittingPunch) return;
+
     if (_selectedEmpId == null) {
       _showWarningPopup('請先登入後再打卡');
       return;
@@ -963,6 +967,7 @@ class _ClockPageState extends State<ClockPage> {
         : now;
     final last = now;
 
+    setState(() => _isSubmittingPunch = true);
     try {
       // ✅ 例外：不走 GPS/圍欄，直接送主管簽核
       if (_locationException) {
@@ -1074,6 +1079,8 @@ class _ClockPageState extends State<ClockPage> {
     } catch (e) {
       debugPrint('❌ 打卡失敗：$e');
       _showWarningPopup('打卡失敗：$e');
+    } finally {
+      if (mounted) setState(() => _isSubmittingPunch = false);
     }
   }
 
@@ -1561,12 +1568,22 @@ class _ClockPageState extends State<ClockPage> {
                                   width: double.infinity,
                                   height: 58,
                                   child: FilledButton.icon(
-                                    onPressed: _selectedEmpId == null ? _showLoginDialog : _doPunch,
-                                    icon: Icon(_selectedEmpId == null ? Icons.login : Icons.fingerprint),
+                                    onPressed: _selectedEmpId == null
+                                        ? _showLoginDialog
+                                        : (_isSubmittingPunch ? null : _doPunch),
+                                    icon: _isSubmittingPunch
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                                          )
+                                        : Icon(_selectedEmpId == null ? Icons.login : Icons.fingerprint),
                                     label: Text(
                                       _selectedEmpId == null
                                           ? '登入後打卡'
-                                          : (emp == null ? '送出' : '送出（${emp.empName}）'),
+                                          : (_isSubmittingPunch
+                                              ? '送出中…'
+                                              : (emp == null ? '送出' : '送出（${emp.empName}）')),
                                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                                     ),
                                   ),
