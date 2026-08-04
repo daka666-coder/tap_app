@@ -19,7 +19,10 @@ const String kApiUrl =
 /// 2) 雲端回傳 ISO 時間（含 Z/offset）一律轉為本機時區顯示
 /// 3) 例外申請可指定「補上班卡／補下班卡」與補打卡時間
 /// 4) Exception_Requests 新增 reviewedBy/reviewedAt，核准駁回自動留下簽核軌跡
-const String kAppVersion = 'v2026.08.04+reviewApprovalTrail';
+/// 5) 核准/駁回信件連結改走 Cloudflare 代理（daka-2cm.pages.dev/review），修正手機多帳號
+///    時 Gmail 改寫 script.google.com 連結導致「找不到網頁」的問題；結果頁改自己畫，
+///    駁回表單送出後按鈕會反灰防止重複點擊
+const String kAppVersion = 'v2026.08.04+cloudflareReviewProxy';
 
 /// ✅ 取得定位逾時秒數
 const int kGpsTimeoutSec = 15;
