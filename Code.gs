@@ -35,13 +35,18 @@ const PROP_SECRET_KEY = 'TAPAPP_SECRET';
 const TZ = 'Asia/Taipei';
 
 // ✅ 每次修改 Code.gs 並部署新版本時同步更新，方便用 GET /exec 直接確認雲端是否已套用最新程式碼
-const SCRIPT_VERSION = 'v2026.08.04+cloudflareReviewProxy';
+const SCRIPT_VERSION = 'v2026.08.04+reviewJsonResponse';
 
 // ✅ 核准/駁回信件連結改走 Cloudflare（非 google.com 網域）。
 // 原因：手機多帳號時，Gmail App 點連結會自動幫 script.google.com 網址加上 /u/{n}/，
 // 但 Apps Script 的 /exec 網址不支援這種路徑格式，一律回應「找不到網頁」。
 // Cloudflare Pages Function（tap_app/functions/review.js）收到請求後在伺服器端轉發給這支 /exec，
 // 瀏覽器網址列全程停留在 daka-2cm.pages.dev，不會被 Gmail 改寫。
+//
+// ✅ approve/rejectSubmit 這兩個 action 改回傳 JSON（而非 HtmlService.createHtmlOutput）。
+// 原因：HtmlService 的輸出是靠 Google 自家的沙箱 iframe 機制渲染，這個機制綁定
+// script.google.com/docs.google.com 的來源網域；被 Cloudflare 代理轉發到別的網域後，
+// 沙箱內的 JS 因為來源網域對不上而整頁空白。改回傳 JSON，讓代理自己畫出結果頁面就沒有這個問題。
 const REVIEW_PROXY_URL = 'https://daka-2cm.pages.dev/review';
 
 /* ===================== Entry ===================== */
@@ -76,14 +81,14 @@ function doGet(e) {
     if (action === 'approve') {
       const reqId = (e.parameter.reqId || '').toString().trim();
       const token = (e.parameter.token || '').toString().trim();
-      if (!reqId) return htmlOut_('Missing reqId');
-      if (!token) return htmlOut_('Missing token');
+      if (!reqId) return jsonOut({ ok: false, message: 'Missing reqId' });
+      if (!token) return jsonOut({ ok: false, message: 'Missing token' });
 
       const ok = verifyToken_(reqId, token);
-      if (!ok) return htmlOut_('Invalid token');
+      if (!ok) return jsonOut({ ok: false, message: 'Invalid token' });
 
       const result = handleApproval_(reqId, 'APPROVED');
-      return htmlOut_(result);
+      return jsonOut({ ok: isSuccessMessage_(result), message: result });
     }
 
     // ✅ 主管點擊 Email 駁回連結：先顯示小表單，讓主管填寫拒絕原因
@@ -104,14 +109,14 @@ function doGet(e) {
       const reqId = (e.parameter.reqId || '').toString().trim();
       const token = (e.parameter.token || '').toString().trim();
       const rejectReason = (e.parameter.rejectReason || '').toString().trim();
-      if (!reqId) return htmlOut_('Missing reqId');
-      if (!token) return htmlOut_('Missing token');
+      if (!reqId) return jsonOut({ ok: false, message: 'Missing reqId' });
+      if (!token) return jsonOut({ ok: false, message: 'Missing token' });
 
       const ok = verifyToken_(reqId, token);
-      if (!ok) return htmlOut_('Invalid token');
+      if (!ok) return jsonOut({ ok: false, message: 'Invalid token' });
 
       const result = handleApproval_(reqId, 'REJECTED', rejectReason);
-      return htmlOut_(result);
+      return jsonOut({ ok: isSuccessMessage_(result), message: result });
     }
 
     // ✅ 員工查詢：自己是否有「被拒絕且尚未看過」的補打卡申請
@@ -602,6 +607,11 @@ function writeReviewMeta_(sh, rowNum, iReviewedBy, iReviewedAt) {
     const reviewedAtText = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
     sh.getRange(rowNum, iReviewedAt + 1).setValue(reviewedAtText).setNumberFormat('@');
   }
+}
+
+// ✅ handleApproval_ 回傳的是給人看的字串（成功訊息開頭是 ✅），這裡轉成布林值給 Cloudflare 代理判斷成功/失敗樣式
+function isSuccessMessage_(message) {
+  return typeof message === 'string' && message.indexOf('✅') === 0;
 }
 
 function verifyToken_(reqId, token) {
