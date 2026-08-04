@@ -18,7 +18,8 @@ const String kApiUrl =
 /// 1) firstPunch 顯示「當日第一筆」(以今日日期為準)；不再因時區/登入造成跨日錯置
 /// 2) 雲端回傳 ISO 時間（含 Z/offset）一律轉為本機時區顯示
 /// 3) 例外申請可指定「補上班卡／補下班卡」與補打卡時間
-const String kAppVersion = 'v2026.08.03+exceptionMakeupPunchTime';
+/// 4) Exception_Requests 新增 reviewedBy/reviewedAt，核准駁回自動留下簽核軌跡
+const String kAppVersion = 'v2026.08.04+reviewApprovalTrail';
 
 /// ✅ 取得定位逾時秒數
 const int kGpsTimeoutSec = 15;
